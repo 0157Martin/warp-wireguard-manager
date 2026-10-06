@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.0.1
+readonly VERSION=1.0.2
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -39,6 +39,17 @@ machine_arch() {
 install_dependencies() {
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl jq tar coreutils iproute2
+}
+
+ipv6_family_available() {
+  [[ -r /proc/sys/net/ipv6/conf/all/disable_ipv6 ]] &&
+    [[ $(< /proc/sys/net/ipv6/conf/all/disable_ipv6) == 0 ]]
+}
+
+require_ipv6_family() {
+  ipv6_family_available && return 0
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+  die 'WireProxy 需要内核 IPv6 地址族来初始化 WireGuard socket。当前 IPv6 地址族已关闭；请先启用它（不要求公网 IPv6 路由），再重新安装。'
 }
 
 download_release_asset() {
@@ -115,6 +126,8 @@ write_service() {
 Description=Cloudflare WARP WireGuard local proxy
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -177,10 +190,12 @@ test_proxy() {
 install_backend() {
   local port=${1:-$DEFAULT_PORT}
   install_dependencies
+  require_ipv6_family
   install_binaries
   generate_profile
   write_config "$port"
   write_service
+  systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
   systemctl enable --now "$SERVICE_NAME"
   if ! wait_for_proxy "$port"; then
     show_service_failure
@@ -203,8 +218,10 @@ status_backend() {
 repair_backend() {
   [[ -x $WGCF_BIN && -x $WIREPROXY_BIN && -s $PROFILE_FILE ]] || { install_backend "${1:-$DEFAULT_PORT}"; return; }
   local port=${1:-$DEFAULT_PORT}
+  require_ipv6_family
   write_config "$port"
   write_service
+  systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
   systemctl enable --now "$SERVICE_NAME"
   systemctl restart "$SERVICE_NAME"
   if ! wait_for_proxy "$port"; then
@@ -224,6 +241,12 @@ stop_backend() {
 }
 
 diagnose_backend() {
+  if ipv6_family_available; then
+    green '[通过] 内核 IPv6 地址族可用（不代表存在公网 IPv6 路由）。'
+  else
+    red '[失败] 内核 IPv6 地址族已禁用；WireProxy 无法初始化 WireGuard socket。'
+    yellow '修复：sysctl -w net.ipv6.conf.all.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0 net.ipv6.conf.lo.disable_ipv6=0'
+  fi
   status_backend || true
   printf '%s\n' '最近连接日志：'
   journalctl -u "$SERVICE_NAME" -n 100 --no-pager 2>&1 | tail -n 30 || true

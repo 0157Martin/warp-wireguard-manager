@@ -17,4 +17,6 @@ warp-wireguard uninstall
 
 安装和修复会等待本机监听最多 45 秒。若服务提前失败或超时，脚本会直接显示经过密钥与 UUID 脱敏的 systemd 状态和最近日志，避免只报告“端口未监听”。
 
+WireProxy 的 WireGuard 引擎需要内核提供 IPv6 地址族，即使服务器没有公网 IPv6 路由、实际出口使用 IPv4。脚本会在安装前检查 `net.ipv6.conf.all.disable_ipv6`；若系统完全关闭了 IPv6，会明确停止并给出恢复命令。它不会自行修改系统网络开关。
+
 本项目供 `v2ray-manager` 作为可替换 WARP 后端调用，也可以独立使用。对调用方提供统一的 `install/status/test/start/stop/diagnose/repair/uninstall/version` 接口。
