@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.0.0
+readonly VERSION=1.0.1
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -18,6 +18,7 @@ readonly SERVICE_NAME=warp-wireguard-manager
 readonly WGCF_API=https://api.github.com/repos/ViRb3/wgcf/releases/latest
 readonly WIREPROXY_API=https://api.github.com/repos/windtf/wireproxy/releases/latest
 readonly DEFAULT_PORT=40000
+readonly START_TIMEOUT=45
 
 red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -140,6 +141,28 @@ proxy_ready() {
   systemctl is-active --quiet "$SERVICE_NAME" && ss -H -lnt "sport = :$port" 2>/dev/null | grep -q .
 }
 
+wait_for_proxy() {
+  local port=$1 attempt
+  for ((attempt=0; attempt<START_TIMEOUT; attempt++)); do
+    proxy_ready "$port" && return 0
+    if systemctl is-failed --quiet "$SERVICE_NAME"; then
+      return 1
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+show_service_failure() {
+  red 'WireProxy 未能启动本机 SOCKS5 监听。'
+  systemctl --no-pager --full status "$SERVICE_NAME" 2>&1 | tail -n 20 >&2 || true
+  journalctl -u "$SERVICE_NAME" -n 40 --no-pager 2>&1 |
+    sed -E \
+      -e 's/((Private|Public|Preshared)Key[=: ]+)[^ ,;}]+/\1[REDACTED]/Ig' \
+      -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[REDACTED-UUID]/g' |
+    tail -n 30 >&2 || true
+}
+
 test_proxy() {
   local port=${1:-$DEFAULT_PORT} trace
   proxy_ready "$port" || die "127.0.0.1:$port 未监听。"
@@ -156,7 +179,10 @@ install_backend() {
   write_config "$port"
   write_service
   systemctl enable --now "$SERVICE_NAME"
-  sleep 3
+  if ! wait_for_proxy "$port"; then
+    show_service_failure
+    die "127.0.0.1:$port 在 ${START_TIMEOUT} 秒内未开始监听。"
+  fi
   test_proxy "$port"
   green "WireGuard WARP 后端已就绪：127.0.0.1:$port"
 }
@@ -178,7 +204,10 @@ repair_backend() {
   write_service
   systemctl enable --now "$SERVICE_NAME"
   systemctl restart "$SERVICE_NAME"
-  sleep 3
+  if ! wait_for_proxy "$port"; then
+    show_service_failure
+    die "127.0.0.1:$port 在 ${START_TIMEOUT} 秒内未开始监听。"
+  fi
   test_proxy "$port"
   green 'WireGuard WARP 后端已修复。'
 }
