@@ -2,6 +2,28 @@
 
 使用 WGCF 注册 Cloudflare WARP，通过 WireProxy 暴露仅本机可访问的 SOCKS5 代理。它不创建系统默认路由，不接管 SSH、DNS、Caddy 或软件更新流量。
 
+## 一键安装、验证与卸载
+
+```bash
+# 安装到 127.0.0.1:40000，并完成真实 WARP 流量验证
+bash <(curl -fsSL https://raw.githubusercontent.com/0157Martin/warp-wireguard-manager/main/install.sh) install
+
+# 验证版本、服务、监听和 Cloudflare trace（必须返回 warp=on）
+warp-wireguard version
+warp-wireguard status
+warp-wireguard test 40000
+
+# 彻底卸载服务、账户、配置、二进制和管理命令
+bash <(curl -fsSL https://raw.githubusercontent.com/0157Martin/warp-wireguard-manager/main/install.sh) uninstall
+```
+
+自定义本机 SOCKS5 端口：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/0157Martin/warp-wireguard-manager/main/install.sh) install 41000
+bash <(curl -fsSL https://raw.githubusercontent.com/0157Martin/warp-wireguard-manager/main/install.sh) verify 41000
+```
+
 ```bash
 warp-wireguard install 40000
 warp-wireguard status

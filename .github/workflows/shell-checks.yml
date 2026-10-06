@@ -7,6 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: bash -n warp-wireguard.sh
+      - run: bash -n install.sh warp-wireguard.sh
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck warp-wireguard.sh
+      - run: shellcheck install.sh warp-wireguard.sh
