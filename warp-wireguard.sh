@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.0.3
+readonly VERSION=1.0.4
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -146,7 +146,6 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadOnlyPaths=$CONFIG_DIR
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 [Install]
 WantedBy=multi-user.target
@@ -175,10 +174,14 @@ show_service_failure() {
   red 'WireProxy 未能启动本机 SOCKS5 监听。'
   systemctl --no-pager --full status "$SERVICE_NAME" 2>&1 | tail -n 20 >&2 || true
   journalctl -u "$SERVICE_NAME" -n 40 --no-pager 2>&1 |
-    sed -E \
-      -e 's/((Private|Public|Preshared)Key[=: ]+)[^ ,;}]+/\1[REDACTED]/Ig' \
-      -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[REDACTED-UUID]/g' |
+    redact_log |
     tail -n 30 >&2 || true
+}
+
+redact_log() {
+  sed -E \
+    -e 's/((Private|Public|Preshared)[_ -]?[Kk]ey[=: ]+)[^ ,;}]+/\1[REDACTED]/Ig' \
+    -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[REDACTED-UUID]/g'
 }
 
 test_proxy() {
@@ -254,7 +257,7 @@ diagnose_backend() {
   fi
   status_backend || true
   printf '%s\n' '最近连接日志：'
-  journalctl -u "$SERVICE_NAME" -n 100 --no-pager 2>&1 | tail -n 30 || true
+  journalctl -u "$SERVICE_NAME" -n 100 --no-pager 2>&1 | tail -n 30 | redact_log || true
 }
 
 uninstall_backend() {

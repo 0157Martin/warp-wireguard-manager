@@ -19,4 +19,6 @@ warp-wireguard uninstall
 
 WireProxy 的 WireGuard 引擎需要内核提供 IPv6 地址族，即使服务器没有公网 IPv6 路由、实际出口使用 IPv4。脚本会在安装前实际创建并绑定一个临时 IPv6 UDP socket；若地址族不可用，会明确停止并提示检查 sysctl 与 `ipv6.disable=1` 内核启动参数。它不会自行修改系统网络开关。
 
+服务单元保留文件系统与权限隔离，但不设置 `RestrictAddressFamilies`。WireGuard Go 网络栈可能使用 SOCKS5 监听之外的 socket family；错误限制会让宿主机测试正常而服务内返回 `address family not supported by protocol`。
+
 本项目供 `v2ray-manager` 作为可替换 WARP 后端调用，也可以独立使用。对调用方提供统一的 `install/status/test/start/stop/diagnose/repair/uninstall/version` 接口。
