@@ -81,13 +81,19 @@ generate_profile() {
   fi
   (cd "$CONFIG_DIR" && "$WGCF_BIN" generate)
   [[ -s $PROFILE_FILE ]] || die 'WGCF 未生成 WireGuard 配置。'
-  grep -q '^PrivateKey' "$PROFILE_FILE" && grep -q '^PublicKey' "$PROFILE_FILE" && grep -q '^Endpoint' "$PROFILE_FILE" || die 'WGCF 配置缺少必要字段。'
+  if ! grep -q '^PrivateKey' "$PROFILE_FILE" ||
+     ! grep -q '^PublicKey' "$PROFILE_FILE" ||
+     ! grep -q '^Endpoint' "$PROFILE_FILE"; then
+    die 'WGCF 配置缺少必要字段。'
+  fi
   chmod 600 "$ACCOUNT_FILE" "$PROFILE_FILE"
 }
 
 write_config() {
   local port=$1 temporary
-  [[ $port =~ ^[0-9]+$ ]] && (( port >= 1024 && port <= 65535 )) || die 'SOCKS5 端口必须在 1024-65535。'
+  if [[ ! $port =~ ^[0-9]+$ ]] || (( port < 1024 || port > 65535 )); then
+    die 'SOCKS5 端口必须在 1024-65535。'
+  fi
   temporary=$(mktemp "$CONFIG_DIR/wireproxy.conf.XXXXXX")
   cat >"$temporary" <<EOF
 WGConfig = $PROFILE_FILE
@@ -177,6 +183,20 @@ repair_backend() {
   green 'WireGuard WARP 后端已修复。'
 }
 
+start_backend() {
+  systemctl enable --now "$SERVICE_NAME"
+}
+
+stop_backend() {
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+}
+
+diagnose_backend() {
+  status_backend || true
+  printf '%s\n' '最近连接日志：'
+  journalctl -u "$SERVICE_NAME" -n 100 --no-pager 2>&1 | tail -n 30 || true
+}
+
 uninstall_backend() {
   systemctl disable --now "$SERVICE_NAME" 2>/dev/null || true
   rm -f -- "$SERVICE_FILE"
@@ -191,11 +211,16 @@ main() {
     install) install_backend "${2:-$DEFAULT_PORT}" ;;
     status) status_backend ;;
     test) test_proxy "${2:-$DEFAULT_PORT}" ;;
+    start) start_backend ;;
+    stop) stop_backend ;;
+    diagnose) diagnose_backend ;;
     repair) repair_backend "${2:-$DEFAULT_PORT}" ;;
     uninstall) uninstall_backend ;;
     version) printf '%s %s\n' "$APP_NAME" "$VERSION" ;;
-    *) die '用法：warp-wireguard [install|status|test|repair|uninstall|version] [端口]' ;;
+    *) die '用法：warp-wireguard [install|status|test|start|stop|diagnose|repair|uninstall|version] [端口]' ;;
   esac
 }
 
-main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main "$@"
+fi
