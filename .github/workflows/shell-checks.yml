@@ -1,0 +1,12 @@
+name: shell-checks
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n warp-wireguard.sh
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck warp-wireguard.sh
