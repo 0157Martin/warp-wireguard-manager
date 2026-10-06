@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.0.2
+readonly VERSION=1.0.3
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -38,18 +38,23 @@ machine_arch() {
 
 install_dependencies() {
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl jq tar coreutils iproute2
+  DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl jq tar coreutils iproute2 python3-minimal
 }
 
 ipv6_family_available() {
-  [[ -r /proc/sys/net/ipv6/conf/all/disable_ipv6 ]] &&
-    [[ $(< /proc/sys/net/ipv6/conf/all/disable_ipv6) == 0 ]]
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 - <<'PY' >/dev/null 2>&1
+import socket
+s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+s.bind(("::", 0))
+s.close()
+PY
 }
 
 require_ipv6_family() {
   ipv6_family_available && return 0
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-  die 'WireProxy 需要内核 IPv6 地址族来初始化 WireGuard socket。当前 IPv6 地址族已关闭；请先启用它（不要求公网 IPv6 路由），再重新安装。'
+  die 'WireProxy 无法创建 IPv6 UDP socket。请检查所有 disable_ipv6 设置和内核启动参数 ipv6.disable=1；恢复 IPv6 地址族后再安装（不要求公网 IPv6 路由）。'
 }
 
 download_release_asset() {
@@ -244,8 +249,8 @@ diagnose_backend() {
   if ipv6_family_available; then
     green '[通过] 内核 IPv6 地址族可用（不代表存在公网 IPv6 路由）。'
   else
-    red '[失败] 内核 IPv6 地址族已禁用；WireProxy 无法初始化 WireGuard socket。'
-    yellow '修复：sysctl -w net.ipv6.conf.all.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0 net.ipv6.conf.lo.disable_ipv6=0'
+    red '[失败] 无法实际创建 IPv6 UDP socket；WireProxy 无法初始化 WireGuard bind。'
+    yellow '检查：grep -RnsE "disable_ipv6.*=.*1|ipv6.disable=1" /etc/sysctl.conf /etc/sysctl.d /etc/default/grub 2>/dev/null'
   fi
   status_backend || true
   printf '%s\n' '最近连接日志：'
