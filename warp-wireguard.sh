@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.2.0
+readonly APP_VERSION=1.2.0
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -327,7 +327,7 @@ main() {
     diagnose) diagnose_backend ;;
     repair) repair_backend "${2:-$DEFAULT_PORT}" ;;
     uninstall) uninstall_backend ;;
-    version) printf '%s %s\n' "$APP_NAME" "$VERSION" ;;
+    version) printf '%s %s\n' "$APP_NAME" "$APP_VERSION" ;;
     *) die '用法：warp-wireguard [install|status|test|start|stop|diagnose|repair|uninstall|version] [端口]' ;;
   esac
 }
