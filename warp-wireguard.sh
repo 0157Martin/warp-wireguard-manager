@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.0.4
+readonly VERSION=1.1.0
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -16,7 +16,8 @@ readonly WIREPROXY_BIN=/usr/local/libexec/warp-wireguard-manager/wireproxy
 readonly SERVICE_FILE=/etc/systemd/system/warp-wireguard-manager.service
 readonly SERVICE_NAME=warp-wireguard-manager
 readonly WGCF_API=https://api.github.com/repos/ViRb3/wgcf/releases/latest
-readonly WIREPROXY_API=https://api.github.com/repos/windtf/wireproxy/releases/latest
+readonly WIREPROXY_VERSION=1.0.8
+readonly WIREPROXY_API="https://api.github.com/repos/windtf/wireproxy/releases/tags/v${WIREPROXY_VERSION}"
 readonly DEFAULT_PORT=40000
 readonly START_TIMEOUT=45
 
@@ -89,6 +90,7 @@ install_binaries() {
   arch=$(machine_arch)
   download_release_asset "$WGCF_API" "^wgcf_[0-9.]+_linux_${arch}$" "$WGCF_BIN"
   download_release_asset "$WIREPROXY_API" "^wireproxy_linux_${arch}\\.tar\\.gz$" "$WIREPROXY_BIN" 1
+  "$WIREPROXY_BIN" -v 2>&1 | grep -Fq "version $WIREPROXY_VERSION" || die "WireProxy 版本校验失败，期望：$WIREPROXY_VERSION"
 }
 
 generate_profile() {
@@ -220,6 +222,7 @@ status_backend() {
   [[ -r $STATE_FILE ]] && { source "$STATE_FILE"; port=${PORT:-$DEFAULT_PORT}; }
   printf '后端：WireGuard / WireProxy\n服务：%s\n监听：127.0.0.1:%s\n' "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)" "$port"
   "$WIREPROXY_BIN" -v 2>/dev/null || true
+  printf '固定版本：%s\n' "$WIREPROXY_VERSION"
   proxy_ready "$port" && test_proxy "$port" || return 1
 }
 

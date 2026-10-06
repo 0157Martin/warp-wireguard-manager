@@ -13,7 +13,7 @@ warp-wireguard repair 40000
 warp-wireguard uninstall
 ```
 
-运行时文件位于 `/etc/warp-wireguard-manager`，服务名为 `warp-wireguard-manager.service`。发布资产从 WGCF 与 WireProxy 的 GitHub Releases 获取，并使用上游 `checksums.txt` 校验 SHA-256。
+运行时文件位于 `/etc/warp-wireguard-manager`，服务名为 `warp-wireguard-manager.service`。发布资产从 WGCF 与 WireProxy 的 GitHub Releases 获取，并使用上游 `checksums.txt` 校验 SHA-256。WireProxy 固定为已验证的 `1.0.8`，避免生产安装无条件跟随上游 `latest`；升级固定版本前必须重新验证 SOCKS5 监听和 WireGuard 出站。
 
 安装和修复会等待本机监听最多 45 秒。若服务提前失败或超时，脚本会直接显示经过密钥与 UUID 脱敏的 systemd 状态和最近日志，避免只报告“端口未监听”。
 
