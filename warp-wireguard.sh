@@ -165,7 +165,10 @@ show_service_failure() {
 
 test_proxy() {
   local port=${1:-$DEFAULT_PORT} trace
-  proxy_ready "$port" || die "127.0.0.1:$port 未监听。"
+  if ! proxy_ready "$port"; then
+    show_service_failure
+    die "127.0.0.1:$port 未监听。"
+  fi
   trace=$(curl --fail --silent --show-error --max-time 20 --proxy "socks5h://127.0.0.1:$port" https://www.cloudflare.com/cdn-cgi/trace) || die '无法通过 WireGuard WARP 代理联网。'
   grep -q '^warp=on$' <<<"$trace" || die 'Cloudflare 未确认 WARP 已连接。'
   awk -F= '/^(ip|loc|warp)=/{printf "%s: %s\n", $1, $2}' <<<"$trace"
