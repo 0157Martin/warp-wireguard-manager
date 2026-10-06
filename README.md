@@ -21,4 +21,6 @@ WireProxy 的 WireGuard 引擎需要内核提供 IPv6 地址族，即使服务�
 
 服务单元保留文件系统与权限隔离，但不设置 `RestrictAddressFamilies`。WireGuard Go 网络栈可能使用 SOCKS5 监听之外的 socket family；错误限制会让宿主机测试正常而服务内返回 `address family not supported by protocol`。
 
+安装与修复不会把“进程已启动”当作成功。脚本依次测试 WGCF 原入口、Cloudflare consumer/Zero Trust IPv4 入口以及官方 WireGuard 端口 `2408/4500/500/1701`，通过本机 SOCKS5 请求 Cloudflare trace；只有返回 `warp=on` 才保存端点并报告安装完成。全部失败时停止服务并明确报告机房可能限制非官方 WireGuard。
+
 本项目供 `v2ray-manager` 作为可替换 WARP 后端调用，也可以独立使用。对调用方提供统一的 `install/status/test/start/stop/diagnose/repair/uninstall/version` 接口。

@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly VERSION=1.1.0
+readonly VERSION=1.2.0
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -123,8 +123,6 @@ EOF
   "$WIREPROXY_BIN" -c "$temporary" -n >/dev/null || { rm -f -- "$temporary"; die 'WireProxy 配置校验失败。'; }
   install -m 600 "$temporary" "$WIREPROXY_CONFIG"
   rm -f -- "$temporary"
-  printf 'BACKEND=wireguard\nPORT=%q\n' "$port" >"$STATE_FILE"
-  chmod 600 "$STATE_FILE"
 }
 
 write_service() {
@@ -197,6 +195,54 @@ test_proxy() {
   awk -F= '/^(ip|loc|warp)=/{printf "%s: %s\n", $1, $2}' <<<"$trace"
 }
 
+proxy_trace_ok() {
+  local port=$1 trace
+  proxy_ready "$port" || return 1
+  trace=$(curl --fail --silent --show-error --max-time 8 \
+    --proxy "socks5h://127.0.0.1:$port" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null) || return 1
+  grep -q '^warp=on$' <<<"$trace"
+}
+
+set_profile_endpoint() {
+  local endpoint=$1 temporary
+  temporary=$(mktemp "$CONFIG_DIR/wgcf-profile.conf.XXXXXX")
+  sed -E "s|^Endpoint[[:space:]]*=.*$|Endpoint = $endpoint|" "$PROFILE_FILE" >"$temporary"
+  grep -Fq "Endpoint = $endpoint" "$temporary" || { rm -f -- "$temporary"; return 1; }
+  install -m 600 "$temporary" "$PROFILE_FILE"
+  rm -f -- "$temporary"
+}
+
+select_working_endpoint() {
+  local port=$1 original endpoint host candidate
+  local -a hosts endpoints
+  original=$(awk -F= '/^Endpoint[[:space:]]*=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$PROFILE_FILE")
+  [[ -n $original ]] || die 'WGCF 配置中没有 Endpoint。'
+  host=${original%:*}
+  hosts=("$host" 162.159.192.1 162.159.193.1)
+  for host in "${hosts[@]}"; do
+    for candidate in 2408 4500 500 1701; do
+      endpoint="$host:$candidate"
+      [[ " ${endpoints[*]-} " == *" $endpoint "* ]] && continue
+      endpoints+=("$endpoint")
+      yellow "测试 WARP WireGuard 入口：$endpoint"
+      set_profile_endpoint "$endpoint" || continue
+      systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+      systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+      systemctl start "$SERVICE_NAME" || continue
+      wait_for_proxy "$port" || continue
+      if proxy_trace_ok "$port"; then
+        printf 'BACKEND=wireguard\nPORT=%q\nENDPOINT=%q\n' "$port" "$endpoint" >"$STATE_FILE"
+        chmod 600 "$STATE_FILE"
+        green "已选择可用入口：$endpoint"
+        return 0
+      fi
+    done
+  done
+  set_profile_endpoint "$original" || true
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+  return 1
+}
+
 install_backend() {
   local port=${1:-$DEFAULT_PORT}
   install_dependencies
@@ -206,10 +252,10 @@ install_backend() {
   write_config "$port"
   write_service
   systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
-  systemctl enable --now "$SERVICE_NAME"
-  if ! wait_for_proxy "$port"; then
+  systemctl enable "$SERVICE_NAME"
+  if ! select_working_endpoint "$port"; then
     show_service_failure
-    die "127.0.0.1:$port 在 ${START_TIMEOUT} 秒内未开始监听。"
+    die '所有 Cloudflare WARP WireGuard 官方入口和备用端口均未通过真实流量验证；该机房可能限制非官方 WireGuard。'
   fi
   test_proxy "$port"
   green "WireGuard WARP 后端已就绪：127.0.0.1:$port"
@@ -233,11 +279,10 @@ repair_backend() {
   write_config "$port"
   write_service
   systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
-  systemctl enable --now "$SERVICE_NAME"
-  systemctl restart "$SERVICE_NAME"
-  if ! wait_for_proxy "$port"; then
+  systemctl enable "$SERVICE_NAME"
+  if ! select_working_endpoint "$port"; then
     show_service_failure
-    die "127.0.0.1:$port 在 ${START_TIMEOUT} 秒内未开始监听。"
+    die '所有 Cloudflare WARP WireGuard 官方入口和备用端口均未通过真实流量验证。'
   fi
   test_proxy "$port"
   green 'WireGuard WARP 后端已修复。'
