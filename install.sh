@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bootstrap installer for warp-wireguard-manager.
-# Author: 0157Martin
+# Author: Martin&林知远
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -Eeuo pipefail
 

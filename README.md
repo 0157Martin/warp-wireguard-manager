@@ -1,5 +1,6 @@
 # warp-wireguard-manager
 
+作者：**Martin&林知远**
 使用 WGCF 注册 Cloudflare WARP，通过 WireProxy 暴露仅本机可访问的 SOCKS5 代理。它不创建系统默认路由，不接管 SSH、DNS、Caddy 或软件更新流量。
 
 ## 一键安装、验证与卸载

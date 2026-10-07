@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Cloudflare WARP WireGuard backend exposed as a local SOCKS5 proxy.
-# Author: 0157Martin
+# Author: Martin&林知远
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -Eeuo pipefail
 
 readonly APP_NAME=warp-wireguard-manager
-readonly APP_VERSION=1.2.0
+readonly APP_VERSION=1.2.1
+readonly AUTHOR='Martin&林知远'
 readonly CONFIG_DIR=/etc/warp-wireguard-manager
 readonly PROFILE_FILE="$CONFIG_DIR/wgcf-profile.conf"
 readonly ACCOUNT_FILE="$CONFIG_DIR/wgcf-account.toml"
@@ -327,7 +328,7 @@ main() {
     diagnose) diagnose_backend ;;
     repair) repair_backend "${2:-$DEFAULT_PORT}" ;;
     uninstall) uninstall_backend ;;
-    version) printf '%s %s\n' "$APP_NAME" "$APP_VERSION" ;;
+    version) printf '%s %s by %s\n' "$APP_NAME" "$APP_VERSION" "$AUTHOR" ;;
     *) die '用法：warp-wireguard [install|status|test|start|stop|diagnose|repair|uninstall|version] [端口]' ;;
   esac
 }
